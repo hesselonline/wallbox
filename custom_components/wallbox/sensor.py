@@ -71,7 +71,7 @@ class WallboxSensor(Entity):
         return self._attributes
 
     def update(self):
-        """Get the latest data from the SEMS API and updates the state."""
+        """Get the latest data from the wallbox API and updates the state."""
         _LOGGER.debug("update called.")
 
         try:
