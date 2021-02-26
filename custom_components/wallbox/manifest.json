@@ -1,0 +1,7 @@
+{
+    "domain": "sems",
+    "name": "Wallbox Portal API",
+    "documentation": "https://github.com/hesselonline/wallbox",
+    "codeowners": ["hesselonline"],
+    "requirements": ["wallbox"]
+  }

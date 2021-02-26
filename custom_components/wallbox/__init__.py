@@ -1,0 +1,1 @@
+"""Wallbox API Component."""
