@@ -7,7 +7,7 @@ In configuration.yaml add the sensor as follows:
 
     - platform: wallbox 
       username: youremailaddresshere
-      password: secretpasswordfromsemsportal
+      password: secretpasswordfromwallboxportal
       station_id: stationidhere
       name: (optional, name for sensor)
 <br>
