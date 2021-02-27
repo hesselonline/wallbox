@@ -1,18 +1,14 @@
 """"Home Assistant component for accessing the Wallbox Portal API.
     """
 
-import json
 import logging
-import time
-from datetime import datetime, timedelta
-import requests
-import logging
+
+import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from wallbox import Wallbox
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, CONF_NAME, POWER_WATT
-import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity import Entity
+from wallbox import Wallbox
 
 DOMAIN = "wallbox"
 
