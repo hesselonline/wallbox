@@ -10,7 +10,7 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, CONF_NAME, POWER_W
 from homeassistant.helpers.entity import Entity
 from wallbox import Wallbox
 
-DOMAIN = "wallbox"
+from . import DOMAIN
 
 CONF_STATION_ID = 'station_id'
 

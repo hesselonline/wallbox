@@ -5,8 +5,8 @@ import logging
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from homeassistant.components.switch import PLATFORM_SCHEMA
-from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.number import NumberEntity
+from homeassistant.components.number import PLATFORM_SCHEMA
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, CONF_NAME
 from wallbox import Wallbox
 
@@ -30,19 +30,21 @@ _LOGGER = logging.getLogger(__name__)
 def setup_platform(hass, config, add_devices, discovery_info=None):
     """Setup the Wallbox portal switch platform."""
     # Add devices
-    add_devices([WallboxPause(f"{config[CONF_NAME]} Pause", config)],
+    add_devices([WallboxMaxChargingCurrent(f"{config[CONF_NAME]} Max. Charging Current", config)],
                 True)
 
 
-class WallboxPause(SwitchEntity):
+class WallboxMaxChargingCurrent(NumberEntity):
     """Representation of the Wallbox Pause Switch."""
 
     def __init__(self, name, config):
         self._is_on = False
         self._name = name
         self._config = config
+        self._value = 0
+        self._uniqueid = f"{name}max_charging_current"
 
-    def get_charging_status(self):
+    def get_max_charging_current(self):
         """Get the latest data from the wallbox API and updates the state."""
         _LOGGER.debug("update called.")
 
@@ -54,15 +56,14 @@ class WallboxPause(SwitchEntity):
             w = Wallbox(user, password)
             w.authenticate()
             data = w.getChargerStatus(station)
-            charger_status = data['status_description']
-            charger_paused = charger_status.lower() == "connected"
-            return charger_paused
+            max_charger_current = data['config_data']['max_charging_current']
+            return max_charger_current
 
         except Exception as exception:
             _LOGGER.error(
                 "Unable to fetch data from Wallbox. %s", exception)
 
-    def pause_charger(self, pause):
+    def set_max_charging_current(self, max_charging_current):
         """Pause / Resume Charger using API"""
 
         try:
@@ -73,17 +74,10 @@ class WallboxPause(SwitchEntity):
             w = Wallbox(user, password)
             w.authenticate()
 
-            if pause is False:
-                """"unlock charger"""
-                _LOGGER.debug(
-                    "Unlocking Wallbox")
-                w.resumeChargingSession(station)
-
-            elif pause is True:
-                """"lock charger"""
-                _LOGGER.debug(
-                    "Locking Wallbox")
-                w.pauseChargingSession(station)
+            """"unlock charger"""
+            _LOGGER.debug(
+                "Unlocking Wallbox")
+            w.setMaxChargingCurrent(station,max_charging_current)
 
         except Exception as exception:
             _LOGGER.error(
@@ -99,19 +93,13 @@ class WallboxPause(SwitchEntity):
         return 'mdi:ev-station'
 
     @property
-    def is_on(self):
-        return self._is_on
+    def value(self):
+        return self._value
 
-    def turn_on(self, **kwargs):
-        self.pause_charger(True)
-        self._is_on = True
-
-    def turn_off(self, **kwargs):
-        self.pause_charger(False)
-        self._is_on = False
+    def set_value(self,  value: float):
+        self.set_max_charging_current(value)
+        self._value = value
 
     def update(self):
-        if self.get_charging_status():
-            self._is_on = True
-        else:
-            self._is_on = False
+        self._value = self.get_max_charging_current()
+
