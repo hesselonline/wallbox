@@ -95,7 +95,10 @@ class WallboxLock(LockEntity):
 
     @property
     def icon(self):
-        return 'mdi:ev-station'
+        if self._is_locked:
+            return 'mdi:lock'
+        else:
+            return 'mdi:lock-open'
 
     @property
     def is_locked(self):

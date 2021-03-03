@@ -96,7 +96,10 @@ class WallboxPause(SwitchEntity):
 
     @property
     def icon(self):
-        return 'mdi:ev-station'
+        if self._is_on:
+            return 'mdi:motion-play-outline'
+        else:
+            return 'mdi:motion-pause-outline'
 
     @property
     def is_on(self):
