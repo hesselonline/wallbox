@@ -5,88 +5,92 @@ import logging
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
+from datetime import timedelta
 from homeassistant.components.lock import PLATFORM_SCHEMA
 from homeassistant.components.lock import LockEntity
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, CONF_NAME
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
 from wallbox import Wallbox
 
-from . import DOMAIN
+from .const import DOMAIN, CONF_STATION, CONF_CONNECTIONS
 
-CONF_STATION_ID = 'station_id'
-
-DEFAULTNAME = "Wallbox"
-
-# Validation of the user's configuration
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Optional(CONF_NAME, default=DEFAULTNAME): cv.string,
-    vol.Required(CONF_USERNAME): cv.string,
-    vol.Required(CONF_PASSWORD): cv.string,
-    vol.Required(CONF_STATION_ID): cv.string
-})
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def setup_platform(hass, config, add_devices, discovery_info=None):
-    """Setup the Wallbox portal switch platform."""
-    # Add devices
-    add_devices([WallboxLock(f"{config[CONF_NAME]} Lock", config)],
-                True)
+def wallbox_updater(wallbox, station):
+
+    w = wallbox
+    data = w.getChargerStatus(station)
+    charger_locked = data["config_data"]["locked"]
+    return charger_locked
 
 
-class WallboxLock(LockEntity):
-    """Representation of the Wallbox portal."""
+async def async_setup_entry(hass, config, async_add_entities):
 
-    def __init__(self, name, config):
-        self._is_locked = False
-        self._name = name
-        self._config = config
+    wallbox = hass.data[DOMAIN][CONF_CONNECTIONS][config.entry_id]
+    station = config.data[CONF_STATION]
+    name = config.title
 
-    def get_lock_status(self):
-        """Get the latest data from the wallbox API and updates the state."""
-        _LOGGER.debug("update called.")
+    async def async_update_data():
 
         try:
-            station = self._config[CONF_STATION_ID]
-            user = self._config[CONF_USERNAME]
-            password = self._config[CONF_PASSWORD]
-
-            w = Wallbox(user, password)
-            w.authenticate()
-            data = w.getChargerStatus(station)
-            charger_locked = data['config_data']['locked']
-            return charger_locked
+            return await hass.async_add_executor_job(wallbox_updater, wallbox, station)
 
         except Exception as exception:
-            _LOGGER.error(
-                "Unable to fetch data from Wallbox. %s", exception)
+            _LOGGER.error("Unable to fetch data from Wallbox Switch. %s", exception)
+            return
 
-    def lock_charger(self, lock):
+    coordinator = DataUpdateCoordinator(
+        hass,
+        _LOGGER,
+        # Name of the data. For logging purposes.
+        name="wallbox",
+        update_method=async_update_data,
+        # Polling interval. Will only be polled if there are subscribers.
+        update_interval=timedelta(seconds=15),
+    )
+
+    await coordinator.async_refresh()
+
+    async_add_entities(
+        [WallboxLock(f"{name} Lock", config, coordinator, wallbox, hass)]
+    )
+
+
+class WallboxLock(CoordinatorEntity, LockEntity):
+    """Representation of the Wallbox portal."""
+
+    def __init__(self, name, config, coordinator, wallbox, hass):
+        super().__init__(coordinator)
+        self._hass = hass
+        self._wallbox = wallbox
+        self._name = name
+        self.station = config.data[CONF_STATION]
+
+    async def lock_charger(self, lock):
         """Lock / Unlock charger using API"""
 
         try:
-            station = self._config[CONF_STATION_ID]
-            user = self._config[CONF_USERNAME]
-            password = self._config[CONF_PASSWORD]
-
-            w = Wallbox(user, password)
-            w.authenticate()
+            station = self.station
+            w = self._wallbox
 
             if lock is False:
                 """"unlock charger"""
-                _LOGGER.debug(
-                    "Unlocking Wallbox")
-                w.unlockCharger(station)
+                _LOGGER.debug("Unlocking Wallbox")
+                self._hass.async_add_executor_job(w.unlockCharger, station)
 
             elif lock is True:
                 """"lock charger"""
-                _LOGGER.debug(
-                    "Locking Wallbox")
-                w.lockCharger(station)
+                _LOGGER.debug("Locking Wallbox")
+                self._hass.async_add_executor_job(w.lockCharger, station)
 
         except Exception as exception:
-            _LOGGER.error(
-                "Unable to fetch data from Wallbox. %s", exception)
+            _LOGGER.error("Unable to fetch data from Wallbox. %s", exception)
 
     @property
     def name(self):
@@ -95,25 +99,20 @@ class WallboxLock(LockEntity):
 
     @property
     def icon(self):
-        if self._is_locked:
-            return 'mdi:lock'
+        if self.coordinator.data:
+            return "mdi:lock"
         else:
-            return 'mdi:lock-open'
+            return "mdi:lock-open"
 
     @property
     def is_locked(self):
-        return self._is_locked
+        return self.coordinator.data
 
-    def lock(self, **kwargs):
-        self.lock_charger(True)
-        self._is_locked = True
+    async def async_lock(self, **kwargs):
+        await self.lock_charger(True)
+        self.coordinator.async_set_updated_data(True)
 
-    def unlock(self, **kwargs):
-        self.lock_charger(False)
-        self._is_locked = False
-
-    def update(self):
-        if self.get_lock_status():
-            self._is_locked = True
-        else:
-            self._is_locked = False
+    async def async_unlock(self, **kwargs):
+        self.coordinator.data = False
+        await self.lock_charger(False)
+        self.coordinator.async_set_updated_data(False)

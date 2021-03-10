@@ -1,7 +1,16 @@
 {
-    "domain": "wallbox",
-    "name": "Wallbox Portal API",
-    "documentation": "https://github.com/hesselonline/wallbox",
-    "codeowners": ["hesselonline"],
-    "requirements": ["wallbox"]
-  }
+  "domain": "wallbox",
+  "name": "Wallbox",
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/wallbox",
+  "requirements": [
+    "wallbox==0.4.4"
+  ],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "dependencies": [],
+  "codeowners": [
+    "@hesselonline"
+  ]
+}

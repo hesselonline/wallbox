@@ -7,7 +7,7 @@ import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from datetime import timedelta
 from homeassistant.components.sensor import PLATFORM_SCHEMA
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, CONF_NAME, POWER_WATT, ENERGY_KILO_WATT_HOUR, ELECTRICAL_CURRENT_AMPERE, LENGTH_KILOMETERS, PERCENTAGE
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, CONF_NAME
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -16,111 +16,44 @@ from homeassistant.helpers.update_coordinator import (
 from homeassistant.helpers.entity import Entity
 from wallbox import Wallbox
 
-from . import DOMAIN
+from .const import DOMAIN, SENSOR_TYPES, CONF_CONNECTIONS
 
-CONF_STATION_ID = 'station_id'
+CONF_STATION = "station"
 
 DEFAULTNAME = "Wallbox Portal"
 
 # Validation of the user's configuration
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Optional(CONF_NAME, default=DEFAULTNAME): cv.string,
-    vol.Required(CONF_USERNAME): cv.string,
-    vol.Required(CONF_PASSWORD): cv.string,
-    vol.Required(CONF_STATION_ID): cv.string
-})
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+    {
+        vol.Optional(CONF_NAME, default=DEFAULTNAME): cv.string,
+        vol.Required(CONF_USERNAME): cv.string,
+        vol.Required(CONF_PASSWORD): cv.string,
+        vol.Required(CONF_STATION): cv.string,
+    }
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-SENSOR_TYPES = {
-'charging_power': {
-    'ATTR_ICON': 'mdi:ev-station',
-    'ATTR_LABEL': 'Charging Power',
-    'ATTR_UNIT': POWER_WATT,
-    'ATTR_ENABLED': True
-},
-'max_available_power': {
-    'ATTR_ICON': 'mdi:ev-station',
-    'ATTR_LABEL': 'Max Available Power',
-    'ATTR_UNIT': ELECTRICAL_CURRENT_AMPERE,
-    'ATTR_ENABLED': True
-},
-'charging_speed': {
-    'ATTR_ICON': 'mdi:speedometer',
-    'ATTR_LABEL': 'Charging Speed',
-    'ATTR_UNIT': None,
-    'ATTR_ENABLED': True
-},
-'added_range': {
-    'ATTR_ICON': 'mdi:map-marker-distance',
-    'ATTR_LABEL': 'Added Range',
-    'ATTR_UNIT': LENGTH_KILOMETERS,
-    'ATTR_ENABLED': True
-},
-'added_energy': {
-    'ATTR_ICON': 'mdi:battery-positive',
-    'ATTR_LABEL': 'Added Energy',
-    'ATTR_UNIT': ENERGY_KILO_WATT_HOUR,
-    'ATTR_ENABLED': True
-},
-'charging_time': {
-    'ATTR_ICON': 'mdi:timer',
-    'ATTR_LABEL': 'Charging Time',
-    'ATTR_UNIT': None,
-    'ATTR_ENABLED': True
-},
-'cost': {
-    'ATTR_ICON': 'mdi:ev-station',
-    'ATTR_LABEL': 'Cost',
-    'ATTR_UNIT': None,
-    'ATTR_ENABLED': True
-},
-'state_of_charge': {
-    'ATTR_ICON': 'mdi:battery-charging-80',
-    'ATTR_LABEL': 'State of Charge',
-    'ATTR_UNIT': PERCENTAGE,
-    'ATTR_ENABLED': True
-},
-'current_mode': {
-    'ATTR_ICON': 'mdi:ev-station',
-    'ATTR_LABEL': 'Current Mode',
-    'ATTR_UNIT': None,
-    'ATTR_ENABLED': True
-},
-'depot_price': {
-    'ATTR_ICON': 'mdi:ev-station',
-    'ATTR_LABEL': 'Depot Price',
-    'ATTR_UNIT': None,
-    'ATTR_ENABLED': True
-},
-'status_description': {
-    'ATTR_ICON': 'mdi:ev-station',
-    'ATTR_LABEL': 'Status Description',
-    'ATTR_UNIT': None,
-    'ATTR_ENABLED': True
-}}
 
-def wallbox_updater(user, password, station):
+def wallbox_updater(wallbox, station):
 
-    w = Wallbox(user, password)
-    w.authenticate()
-
+    w = wallbox
     data = w.getChargerStatus(station)
 
     return dict((k, data[k]) for k in SENSOR_TYPES if k in data)
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
 
+async def async_setup_entry(hass, config, async_add_entities):
 
-    station = config.get(CONF_STATION_ID)
-    user = config.get(CONF_USERNAME)
-    password = config.get(CONF_PASSWORD)
+    wallbox = hass.data[DOMAIN][CONF_CONNECTIONS][config.entry_id]
+
+    station = config.data[CONF_STATION]
 
     async def async_update_data():
 
         try:
-            return await hass.async_add_executor_job(wallbox_updater,user,password,station)
-           
+            return await hass.async_add_executor_job(wallbox_updater, wallbox, station)
+
         except:
             _LOGGER.error("Error getting data from wallbox API")
             return
@@ -138,11 +71,11 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     await coordinator.async_refresh()
 
     async_add_entities(
-        WallboxSensor(coordinator, idx, ent) for idx, ent in enumerate(coordinator.data))
-    
+        WallboxSensor(coordinator, idx, ent) for idx, ent in enumerate(coordinator.data)
+    )
 
 
-class WallboxSensor(CoordinatorEntity,Entity):
+class WallboxSensor(CoordinatorEntity, Entity):
     """Representation of the Wallbox portal."""
 
     def __init__(self, coordinator, idx, ent):
@@ -150,9 +83,9 @@ class WallboxSensor(CoordinatorEntity,Entity):
         super().__init__(coordinator)
         self._properties = SENSOR_TYPES[ent]
         self._name = f"Wallbox {self._properties['ATTR_LABEL']}"
-        self._icon = self._properties['ATTR_ICON']
-        self._unit = self._properties['ATTR_UNIT']
-        self._value = self.coordinator.data[ent]
+        self._icon = self._properties["ATTR_ICON"]
+        self._unit = self._properties["ATTR_UNIT"]
+        self._ent = ent
 
     @property
     def name(self):
@@ -161,7 +94,7 @@ class WallboxSensor(CoordinatorEntity,Entity):
 
     @property
     def state(self):
-        return self._value
+        return self.coordinator.data[self._ent]
 
     @property
     def unit_of_measurement(self):
