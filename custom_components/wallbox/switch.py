@@ -59,7 +59,16 @@ async def async_setup_entry(hass, config, async_add_entities):
 
     await coordinator.async_refresh()
 
-    async_add_entities([WallboxPause(f"{name} Pause", config, coordinator, wallbox)])
+    async_add_entities(
+        [
+            WallboxPause(
+                f"{name} Pause",
+                config,
+                coordinator,
+                wallbox,
+            )
+        ]
+    )
 
 
 class WallboxPause(CoordinatorEntity, SwitchEntity):
@@ -108,20 +117,30 @@ class WallboxPause(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self):
-        return self.coordinator.data == "connected"
+        return self.coordinator.data.lower() not in [
+            "offline",
+            "error",
+            "ready",
+            "charging",
+        ]
 
     @property
     def available(self):
-        return self.coordinator.data in ["connected", "charging"]
+        return self.coordinator.data.lower() not in ["offline", "error", "ready"]
 
     def turn_on(self, **kwargs):
-        if self.coordinator.data == "charging":
+        if self.coordinator.data.lower() == "charging":
             self.pause_charger(True)
         else:
             _LOGGER.debug("Not charging, cannot pause, doing nothing")
 
     def turn_off(self, **kwargs):
-        if self.coordinator.data == "connected":
+        if self.coordinator.data.lower() not in [
+            "offline",
+            "error",
+            "ready",
+            "charging",
+        ]:
             self.pause_charger(False)
         else:
             _LOGGER.debug("Status is not 'connected', cannot unpause, doing nothing")

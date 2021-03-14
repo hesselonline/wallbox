@@ -20,17 +20,6 @@ from .const import DOMAIN, SENSOR_TYPES, CONF_CONNECTIONS
 
 CONF_STATION = "station"
 
-DEFAULTNAME = "Wallbox Portal"
-
-# Validation of the user's configuration
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Optional(CONF_NAME, default=DEFAULTNAME): cv.string,
-        vol.Required(CONF_USERNAME): cv.string,
-        vol.Required(CONF_PASSWORD): cv.string,
-        vol.Required(CONF_STATION): cv.string,
-    }
-)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,14 +28,22 @@ def wallbox_updater(wallbox, station):
 
     w = wallbox
     data = w.getChargerStatus(station)
+    filtered_data = dict((k, data[k]) for k in SENSOR_TYPES if k in data)
 
-    return dict((k, data[k]) for k in SENSOR_TYPES if k in data)
+    for k, v in filtered_data.items():
+        sensor_round = SENSOR_TYPES[k]["ATTR_ROUND"]
+        if sensor_round:
+            try:
+                filtered_data[k] = round(v, sensor_round)
+            except (Exception):
+                _LOGGER.debug(f"Cannot format {k}")
+
+    return filtered_data
 
 
 async def async_setup_entry(hass, config, async_add_entities):
 
     wallbox = hass.data[DOMAIN][CONF_CONNECTIONS][config.entry_id]
-
     station = config.data[CONF_STATION]
 
     async def async_update_data():
@@ -71,18 +68,19 @@ async def async_setup_entry(hass, config, async_add_entities):
     await coordinator.async_refresh()
 
     async_add_entities(
-        WallboxSensor(coordinator, idx, ent) for idx, ent in enumerate(coordinator.data)
+        WallboxSensor(coordinator, idx, ent, config)
+        for idx, ent in enumerate(coordinator.data)
     )
 
 
 class WallboxSensor(CoordinatorEntity, Entity):
     """Representation of the Wallbox portal."""
 
-    def __init__(self, coordinator, idx, ent):
+    def __init__(self, coordinator, idx, ent, config):
         """Initialize a Wallbox sensor."""
         super().__init__(coordinator)
         self._properties = SENSOR_TYPES[ent]
-        self._name = f"Wallbox {self._properties['ATTR_LABEL']}"
+        self._name = f"{config.title} {self._properties['ATTR_LABEL']}"
         self._icon = self._properties["ATTR_ICON"]
         self._unit = self._properties["ATTR_UNIT"]
         self._ent = ent

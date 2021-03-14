@@ -77,7 +77,6 @@ class WallboxMaxChargingCurrent(CoordinatorEntity, NumberEntity):
         self._is_on = False
         self._name = name
         self.station = config.data[CONF_STATION]
-        self._uniqueid = f"{name}max_charging_current"
 
     def set_max_charging_current(self, max_charging_current, wallbox):
 
