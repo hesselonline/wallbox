@@ -1,6 +1,7 @@
 """Constants for the Wallbox integration."""
 from homeassistant.const import (
     POWER_WATT,
+    POWER_KILO_WATT,
     ENERGY_KILO_WATT_HOUR,
     ELECTRICAL_CURRENT_AMPERE,
     LENGTH_KILOMETERS,
@@ -19,7 +20,7 @@ SENSOR_TYPES = {
         "ATTR_ICON": "mdi:ev-station",
         "ATTR_LABEL": "Charging Power",
         "ATTR_ROUND": 2,
-        "ATTR_UNIT": POWER_WATT,
+        "ATTR_UNIT": POWER_KILO_WATT,
         "ATTR_ENABLED": True,
     },
     "max_available_power": {
