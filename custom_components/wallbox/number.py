@@ -1,37 +1,30 @@
-""""Home Assistant component for accessing the Wallbox Portal API, the switch component allows pausing/resuming and lock/unlock.
-    """
+"""Home Assistant component for accessing the Wallbox Portal API, the number component allows set charging power."""
 
+from datetime import timedelta
 import logging
 
-import homeassistant.helpers.config_validation as cv
-import voluptuous as vol
-from datetime import timedelta
 from homeassistant.components.number import NumberEntity
-from homeassistant.components.number import PLATFORM_SCHEMA
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, CONF_NAME
-from wallbox import Wallbox
-
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
-    UpdateFailed,
 )
+from homeassistant.const import ELECTRICAL_CURRENT_AMPERE
 
-from .const import DOMAIN, CONF_STATION, CONF_CONNECTIONS
-
+from .const import CONF_CONNECTIONS, CONF_STATION, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def wallbox_updater(wallbox, station):
+    """Get new data for Wallbox component."""
 
-    w = wallbox
-    data = w.getChargerStatus(station)
+    data = wallbox.getChargerStatus(station)
     max_charger_current = data["config_data"]["max_charging_current"]
     return max_charger_current
 
 
 async def async_setup_entry(hass, config, async_add_entities):
+    """Create wallbox switch entities in HASS."""
 
     wallbox = hass.data[DOMAIN][CONF_CONNECTIONS][config.entry_id]
 
@@ -43,7 +36,7 @@ async def async_setup_entry(hass, config, async_add_entities):
         try:
             return await hass.async_add_executor_job(wallbox_updater, wallbox, station)
 
-        except:
+        except ConnectionError:
             _LOGGER.error("Error getting data from wallbox API")
             return
 
@@ -72,35 +65,45 @@ class WallboxMaxChargingCurrent(CoordinatorEntity, NumberEntity):
     """Representation of the Wallbox Pause Switch."""
 
     def __init__(self, name, config, coordinator, wallbox):
+        """Initialize a Wallbox lock."""
         super().__init__(coordinator)
         self._wallbox = wallbox
         self._is_on = False
         self._name = name
         self.station = config.data[CONF_STATION]
+        self._unit = ELECTRICAL_CURRENT_AMPERE
 
-    def set_max_charging_current(self, max_charging_current, wallbox):
+    def set_max_charging_current(self, max_charging_current):
+        """Set max charging current using API."""
 
         try:
-            w = wallbox
-            """"unlock charger"""
-            _LOGGER.debug("Unlocking Wallbox")
-            w.setMaxChargingCurrent(self.station, max_charging_current)
+            wallbox = self._wallbox
+            _LOGGER.debug("Setting charging current")
+            wallbox.setMaxChargingCurrent(self.station, max_charging_current)
 
-        except Exception as exception:
-            _LOGGER.error("Unable to pause/resume Wallbox. %s", exception)
+        except ConnectionError as exception:
+            _LOGGER.error("Unable to set charging current %s", exception)
 
     @property
     def name(self):
-        """Return the name of the switch."""
+        """Return the name of the number entity."""
         return self._name
 
     @property
     def icon(self):
+        """Return the icon of the entity."""
         return "mdi:ev-station"
 
     @property
+    def unit_of_measurement(self):
+        """Return the unit of the sensor."""
+        return self._unit
+
+    @property
     def value(self):
+        """Return the value of the entity."""
         return self.coordinator.data
 
     def set_value(self, value: float):
-        self.set_max_charging_current(value, self._wallbox)
+        """Set the value of the entity."""
+        self.set_max_charging_current(value)

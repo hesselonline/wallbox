@@ -1,17 +1,18 @@
 """Config flow for Wallbox integration."""
 import logging
 
+import requests
 import voluptuous as vol
+from wallbox import Wallbox
 
 from homeassistant import config_entries, core, exceptions
 
-from .const import DOMAIN  # pylint:disable=unused-import
+from .const import DOMAIN
 
-from wallbox import Wallbox
+COMPONENT_DOMAIN = DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# TODO adjust the data schema to the data that you need
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         "station": str,
@@ -22,22 +23,37 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 
 class PlaceholderHub:
-    """Placeholder class to make tests pass.
+    """Wallbox Hub class."""
 
-    TODO Remove this placeholder class and replace with things from your PyPI package.
-    """
-
-    def __init__(self, station):
+    def __init__(self, station, username, password):
         """Initialize."""
-        self.station = station
+        self._station = station
+        self._username = username
+        self._password = password
 
-    async def authenticate(self, username, password) -> bool:
+    def authenticate(self) -> bool:
+        """Authenticate using Wallbox API."""
         try:
-            w = Wallbox(username, password)
-            w.authenticate()
+            wallbox = Wallbox(self._username, self._password)
+            wallbox.authenticate()
             return True
-        except:
-            _LOGGER.error("Cannot authenticate.")
+        except requests.exceptions.HTTPError as wallbox_connection_error:
+            if wallbox_connection_error.response.status_code == "403":
+                raise InvalidAuth from wallbox_connection_error
+            raise ConnectionError from wallbox_connection_error
+
+    def get_data(self) -> bool:
+        """Get new sensor data for Wallbox component."""
+
+        try:
+            wallbox = Wallbox(self._username, self._password)
+            wallbox.authenticate()
+            wallbox.getChargerStatus(self._station)
+            return True
+        except requests.exceptions.HTTPError as wallbox_connection_error:
+            if wallbox_connection_error.response.status_code == "403":
+                raise InvalidAuth from wallbox_connection_error
+            raise ConnectionError from wallbox_connection_error
 
 
 async def validate_input(hass: core.HomeAssistant, data):
@@ -45,33 +61,23 @@ async def validate_input(hass: core.HomeAssistant, data):
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
-    # TODO validate the data can be used to set up a connection.
 
-    # If your PyPI package is not built with async, pass your methods
-    # to the executor:
-    # await hass.async_add_executor_job(
-    #     your_validate_func, data["username"], data["password"]
-    # )
+    hub = PlaceholderHub(data["station"], data["username"], data["password"])
 
-    hub = PlaceholderHub(data["station"])
+    await hass.async_add_executor_job(
+        hub.authenticate,
+    )
 
-    if not await hub.authenticate(data["username"], data["password"]):
-        raise InvalidAuth
-
-    # If you cannot connect:
-    # throw CannotConnect
-    # If the authentication is wrong:
-    # InvalidAuth
+    await hass.async_add_executor_job(hub.get_data)
 
     # Return info that you want to store in the config entry.
     return {"title": "Wallbox Portal"}
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class ConfigFlow(config_entries.ConfigFlow, domain=COMPONENT_DOMAIN):
     """Handle a config flow for Wallbox."""
 
     VERSION = 1
-    # TODO pick one of the available connection classes in homeassistant/config_entries.py
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
     async def async_step_user(self, user_input=None):
@@ -80,7 +86,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_show_form(
                 step_id="user",
                 data_schema=STEP_USER_DATA_SCHEMA,
-                # title="MyWallbox Information",
             )
 
         errors = {}
@@ -88,9 +93,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             info = await validate_input(self.hass, user_input)
         except CannotConnect:
+            _LOGGER.error("Cannot get MyWallbox data, is station serial correct?")
             errors["base"] = "cannot_connect"
         except InvalidAuth:
             errors["base"] = "invalid_auth"
+            _LOGGER.error("Cannot authenticate for MyWallbox")
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"

@@ -1,22 +1,15 @@
-""""Home Assistant component for accessing the Wallbox Portal API.
-    """
+"""Home Assistant component for accessing the Wallbox Portal API. The sensor component creates multiple sensors regarding wallbox performance."""
 
+from datetime import timedelta
 import logging
 
-import homeassistant.helpers.config_validation as cv
-import voluptuous as vol
-from datetime import timedelta
-from homeassistant.components.sensor import PLATFORM_SCHEMA
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, CONF_NAME
+from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
-    UpdateFailed,
 )
-from homeassistant.helpers.entity import Entity
-from wallbox import Wallbox
 
-from .const import DOMAIN, SENSOR_TYPES, CONF_CONNECTIONS
+from .const import CONF_CONNECTIONS, DOMAIN, SENSOR_TYPES
 
 CONF_STATION = "station"
 
@@ -25,23 +18,23 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def wallbox_updater(wallbox, station):
+    """Get new sensor data for Wallbox component."""
+    data = wallbox.getChargerStatus(station)
+    filtered_data = {k: data[k] for k in SENSOR_TYPES if k in data}
 
-    w = wallbox
-    data = w.getChargerStatus(station)
-    filtered_data = dict((k, data[k]) for k in SENSOR_TYPES if k in data)
-
-    for k, v in filtered_data.items():
-        sensor_round = SENSOR_TYPES[k]["ATTR_ROUND"]
+    for key, value in filtered_data.items():
+        sensor_round = SENSOR_TYPES[key]["ATTR_ROUND"]
         if sensor_round:
             try:
-                filtered_data[k] = round(v, sensor_round)
-            except (Exception):
-                _LOGGER.debug(f"Cannot format {k}")
+                filtered_data[key] = round(value, sensor_round)
+            except TypeError:
+                _LOGGER.debug("Cannot format %s", key)
 
     return filtered_data
 
 
 async def async_setup_entry(hass, config, async_add_entities):
+    """Create wallbox sensor entities in HASS."""
 
     wallbox = hass.data[DOMAIN][CONF_CONNECTIONS][config.entry_id]
     station = config.data[CONF_STATION]
@@ -51,7 +44,7 @@ async def async_setup_entry(hass, config, async_add_entities):
         try:
             return await hass.async_add_executor_job(wallbox_updater, wallbox, station)
 
-        except:
+        except ConnectionError:
             _LOGGER.error("Error getting data from wallbox API")
             return
 
@@ -92,12 +85,15 @@ class WallboxSensor(CoordinatorEntity, Entity):
 
     @property
     def state(self):
+        """Return the state of the sensor."""
         return self.coordinator.data[self._ent]
 
     @property
     def unit_of_measurement(self):
+        """Return the unit of the sensor."""
         return self._unit
 
     @property
     def icon(self):
+        """Return the icon of the sensor."""
         return self._icon
