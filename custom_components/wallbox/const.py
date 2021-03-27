@@ -5,6 +5,7 @@ from homeassistant.const import (
     LENGTH_KILOMETERS,
     PERCENTAGE,
     POWER_KILO_WATT,
+    TIME_MINUTES
 )
 
 DOMAIN = "wallbox"
@@ -53,7 +54,7 @@ SENSOR_TYPES = {
         "ATTR_ICON": "mdi:timer",
         "ATTR_LABEL": "Charging Time",
         "ATTR_ROUND": None,
-        "ATTR_UNIT": None,
+        "ATTR_UNIT": TIME_MINUTES,
         "ATTR_ENABLED": True,
     },
     "cost": {
