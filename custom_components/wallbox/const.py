@@ -1,6 +1,6 @@
 """Constants for the Wallbox integration."""
 from homeassistant.const import (
-    ELECTRICAL_CURRENT_AMPERE,
+    ELECTRIC_CURRENT_AMPERE,
     ENERGY_KILO_WATT_HOUR,
     LENGTH_KILOMETERS,
     PERCENTAGE,
@@ -26,7 +26,7 @@ SENSOR_TYPES = {
         "ATTR_ICON": "mdi:ev-station",
         "ATTR_LABEL": "Max Available Power",
         "ATTR_ROUND": 0,
-        "ATTR_UNIT": ELECTRICAL_CURRENT_AMPERE,
+        "ATTR_UNIT": ELECTRIC_CURRENT_AMPERE,
         "ATTR_ENABLED": True,
     },
     "charging_speed": {

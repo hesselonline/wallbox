@@ -8,7 +8,7 @@ from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
-from homeassistant.const import ELECTRICAL_CURRENT_AMPERE
+from homeassistant.const import ELECTRIC_CURRENT_AMPERE
 
 from .const import CONF_CONNECTIONS, CONF_STATION, DOMAIN
 
@@ -71,7 +71,7 @@ class WallboxMaxChargingCurrent(CoordinatorEntity, NumberEntity):
         self._is_on = False
         self._name = name
         self.station = config.data[CONF_STATION]
-        self._unit = ELECTRICAL_CURRENT_AMPERE
+        self._unit = ELECTRIC_CURRENT_AMPERE
 
     def set_max_charging_current(self, max_charging_current):
         """Set max charging current using API."""
