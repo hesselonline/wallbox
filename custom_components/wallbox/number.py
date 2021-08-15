@@ -8,7 +8,7 @@ from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
-from homeassistant.const import ELECTRI_CURRENT_AMPERE
+from homeassistant.const import ELECTRIC_CURRENT_AMPERE
 
 from .const import CONF_CONNECTIONS, CONF_STATION, DOMAIN
 
