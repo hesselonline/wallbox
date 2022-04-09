@@ -1,95 +1,27 @@
 """Constants for the Wallbox integration."""
-from homeassistant.const import (
-    ELECTRIC_CURRENT_AMPERE,
-    ENERGY_KILO_WATT_HOUR,
-    LENGTH_KILOMETERS,
-    PERCENTAGE,
-    POWER_KILO_WATT,
-    TIME_MINUTES
-)
 
 DOMAIN = "wallbox"
 
 CONF_STATION = "station"
-
+CONF_ADDED_ENERGY_KEY = "added_energy"
+CONF_ADDED_RANGE_KEY = "added_range"
+CONF_CHARGING_POWER_KEY = "charging_power"
+CONF_CHARGING_SPEED_KEY = "charging_speed"
+CONF_CHARGING_TIME_KEY = "charging_time"
+CONF_COST_KEY = "cost"
+CONF_CURRENT_MODE_KEY = "current_mode"
+CONF_CURRENT_VERSION_KEY = "currentVersion"
+CONF_DATA_KEY = "config_data"
+CONF_DEPOT_PRICE_KEY = "depot_price"
+CONF_SERIAL_NUMBER_KEY = "serial_number"
+CONF_PART_NUMBER_KEY = "part_number"
+CONF_SOFTWARE_KEY = "software"
+CONF_MAX_AVAILABLE_POWER_KEY = "max_available_power"
+CONF_MAX_CHARGING_CURRENT_KEY = "max_charging_current"
+CONF_PAUSE_RESUME_KEY = "paused"
+CONF_LOCKED_UNLOCKED_KEY = "locked"
+CONF_NAME_KEY = "name"
+CONF_STATE_OF_CHARGE_KEY = "state_of_charge"
+CONF_STATUS_ID_KEY = "status_id"
+CONF_STATUS_DESCRIPTION_KEY = "status_description"
 CONF_CONNECTIONS = "connections"
-
-SENSOR_TYPES = {
-    "charging_power": {
-        "ATTR_ICON": "mdi:ev-station",
-        "ATTR_LABEL": "Charging Power",
-        "ATTR_ROUND": 2,
-        "ATTR_UNIT": POWER_KILO_WATT,
-        "ATTR_ENABLED": True,
-    },
-    "max_available_power": {
-        "ATTR_ICON": "mdi:ev-station",
-        "ATTR_LABEL": "Max Available Power",
-        "ATTR_ROUND": 0,
-        "ATTR_UNIT": ELECTRIC_CURRENT_AMPERE,
-        "ATTR_ENABLED": True,
-    },
-    "charging_speed": {
-        "ATTR_ICON": "mdi:speedometer",
-        "ATTR_LABEL": "Charging Speed",
-        "ATTR_ROUND": 0,
-        "ATTR_UNIT": None,
-        "ATTR_ENABLED": True,
-    },
-    "added_range": {
-        "ATTR_ICON": "mdi:map-marker-distance",
-        "ATTR_LABEL": "Added Range",
-        "ATTR_ROUND": 0,
-        "ATTR_UNIT": LENGTH_KILOMETERS,
-        "ATTR_ENABLED": True,
-    },
-    "added_energy": {
-        "ATTR_ICON": "mdi:battery-positive",
-        "ATTR_LABEL": "Added Energy",
-        "ATTR_ROUND": 2,
-        "ATTR_UNIT": ENERGY_KILO_WATT_HOUR,
-        "ATTR_ENABLED": True,
-    },
-    "charging_time": {
-        "ATTR_ICON": "mdi:timer",
-        "ATTR_LABEL": "Charging Time",
-        "ATTR_ROUND": None,
-        "ATTR_UNIT": TIME_MINUTES,
-        "ATTR_ENABLED": True,
-    },
-    "cost": {
-        "ATTR_ICON": "mdi:ev-station",
-        "ATTR_LABEL": "Cost",
-        "ATTR_ROUND": None,
-        "ATTR_UNIT": None,
-        "ATTR_ENABLED": True,
-    },
-    "state_of_charge": {
-        "ATTR_ICON": "mdi:battery-charging-80",
-        "ATTR_LABEL": "State of Charge",
-        "ATTR_ROUND": None,
-        "ATTR_UNIT": PERCENTAGE,
-        "ATTR_ENABLED": True,
-    },
-    "current_mode": {
-        "ATTR_ICON": "mdi:ev-station",
-        "ATTR_LABEL": "Current Mode",
-        "ATTR_ROUND": None,
-        "ATTR_UNIT": None,
-        "ATTR_ENABLED": True,
-    },
-    "depot_price": {
-        "ATTR_ICON": "mdi:ev-station",
-        "ATTR_LABEL": "Depot Price",
-        "ATTR_ROUND": 2,
-        "ATTR_UNIT": None,
-        "ATTR_ENABLED": True,
-    },
-    "status_description": {
-        "ATTR_ICON": "mdi:ev-station",
-        "ATTR_LABEL": "Status Description",
-        "ATTR_ROUND": None,
-        "ATTR_UNIT": None,
-        "ATTR_ENABLED": True,
-    },
-}
