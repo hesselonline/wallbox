@@ -1,140 +1,83 @@
-"""Home Assistant component for accessing the Wallbox Portal API, the switch component allows pausing/resuming and lock/unlock."""
+"""Home Assistant component for accessing the Wallbox Portal API. The lock component creates a switch entity."""
+from __future__ import annotations
 
-from datetime import timedelta
-import logging
+from dataclasses import dataclass
+from typing import Any
 
-from homeassistant.components.switch import SwitchEntity
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
+from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from . import WallboxCoordinator, WallboxEntity
+from .const import (
+    CONF_DATA_KEY,
+    CONF_PAUSE_RESUME_KEY,
+    CONF_SERIAL_NUMBER_KEY,
+    CONF_STATUS_DESCRIPTION_KEY,
+    DOMAIN,
 )
 
-from .const import CONF_CONNECTIONS, CONF_STATION, DOMAIN
 
-_LOGGER = logging.getLogger(__name__)
-
-
-def wallbox_updater(wallbox, station):
-    """Get new data for Wallbox component."""
-
-    data = wallbox.getChargerStatus(station)
-    status_description = data["status_description"].lower()
-    return status_description
+@dataclass
+class WallboxSwitchEntityDescription(SwitchEntityDescription):
+    """Describes Wallbox sensor entity."""
 
 
-async def async_setup_entry(hass, config, async_add_entities):
-    """Create wallbox switch entities in HASS."""
+SWITCH_TYPES: dict[str, WallboxSwitchEntityDescription] = {
+    CONF_PAUSE_RESUME_KEY: WallboxSwitchEntityDescription(
+        key=CONF_PAUSE_RESUME_KEY, name="Pause/Resume"
+    ),
+}
 
-    wallbox = hass.data[DOMAIN][CONF_CONNECTIONS][config.entry_id]
-    name = config.title
-    station = config.data[CONF_STATION]
 
-    async def async_update_data():
-
-        try:
-            return await hass.async_add_executor_job(wallbox_updater, wallbox, station)
-
-        except ConnectionError as exception:
-            _LOGGER.error("Unable to fetch data from Wallbox Switch. %s", exception)
-
-            return
-
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        # Name of the data. For logging purposes.
-        name="wallbox",
-        update_method=async_update_data,
-        # Polling interval. Will only be polled if there are subscribers.
-        update_interval=timedelta(seconds=15),
-    )
-
-    await coordinator.async_refresh()
-
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    """Create wallbox sensor entities in HASS."""
+    coordinator: WallboxCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        [
-            WallboxPause(
-                f"{name} Pause",
-                config,
-                coordinator,
-                wallbox,
-            )
-        ]
+        [WallboxSwitch(coordinator, entry, SWITCH_TYPES[CONF_PAUSE_RESUME_KEY])]
     )
 
 
-class WallboxPause(CoordinatorEntity, SwitchEntity):
-    """Representation of the Wallbox Pause Switch."""
+class WallboxSwitch(WallboxEntity, SwitchEntity):
+    """Representation of the Wallbox portal."""
 
-    def __init__(self, name, config, coordinator, wallbox):
+    entity_description: WallboxSwitchEntityDescription
+    coordinator: WallboxCoordinator
+
+    def __init__(
+        self,
+        coordinator: WallboxCoordinator,
+        entry: ConfigEntry,
+        description: WallboxSwitchEntityDescription,
+    ) -> None:
         """Initialize a Wallbox switch."""
+
         super().__init__(coordinator)
-        self._wallbox = wallbox
-        self._name = name
-        self.station = config.data[CONF_STATION]
-
-    def pause_charger(self, pause):
-        """Pause / Resume Charger using API."""
-        try:
-
-            station = self.station
-            wallbox = self._wallbox
-
-            if pause is False:
-                _LOGGER.debug("Unlocking Wallbox")
-                wallbox.resumeChargingSession(station)
-
-            elif pause is True:
-                _LOGGER.debug("Locking Wallbox")
-                wallbox.pauseChargingSession(station)
-
-        except ConnectionError as exception:
-            _LOGGER.error("Unable to pause/resume Wallbox. %s", exception)
+        self.entity_description = description
+        self._coordinator = coordinator
+        self._attr_name = f"{entry.title} {description.name}"
+        self._attr_unique_id = f"{description.key}-{coordinator.data[CONF_DATA_KEY][CONF_SERIAL_NUMBER_KEY]}"
 
     @property
-    def name(self):
-        """Return the name of the switch."""
-        return self._name
-
-    @property
-    def icon(self):
-        """Return the icon of the switch."""
-        if self.coordinator.data == "charging":
-            return "mdi:motion-play-outline"
-        if self.coordinator.data == "connected":
-            return "mdi:motion-pause-outline"
-        return "mdi:power-plug-off-outline"
-
-    @property
-    def is_on(self):
-        """Return the status of the switch."""
-        return self.coordinator.data.lower() not in [
-            "offline",
-            "error",
-            "ready",
+    def available(self) -> bool:
+        """Return the availability of the switch."""
+        return self.coordinator.data[CONF_STATUS_DESCRIPTION_KEY].lower() in [
             "charging",
+            "paused",
         ]
 
     @property
-    def available(self):
-        """Return the availability of the switch."""
-        return self.coordinator.data.lower() not in ["offline", "error", "ready"]
+    def is_on(self) -> bool:
+        """Return the status of pause/resume."""
+        return self._coordinator.data[CONF_STATUS_DESCRIPTION_KEY].lower == "charging"  # type: ignore[no-any-return]
 
-    def turn_on(self, **kwargs):
-        """Turn switch on."""
-        if self.coordinator.data.lower() == "charging":
-            self.pause_charger(True)
-        else:
-            _LOGGER.debug("Not charging, cannot pause, doing nothing")
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Pause charger."""
+        await self._coordinator.async_pause_charger(True)
 
-    def turn_off(self, **kwargs):
-        """Turn switch off."""
-        if self.coordinator.data.lower() not in [
-            "offline",
-            "error",
-            "ready",
-            "charging",
-        ]:
-            self.pause_charger(False)
-        else:
-            _LOGGER.debug("Status is not 'connected', cannot unpause, doing nothing")
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Resume charger."""
+        await self.coordinator.async_pause_charger(False)

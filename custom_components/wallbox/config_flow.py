@@ -1,74 +1,40 @@
 """Config flow for Wallbox integration."""
-import logging
+from __future__ import annotations
 
-import requests
+from typing import Any
+
 import voluptuous as vol
 from wallbox import Wallbox
 
-from homeassistant import config_entries, core, exceptions
+from homeassistant import config_entries, core
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.data_entry_flow import FlowResult
 
-from .const import DOMAIN
+from . import InvalidAuth, WallboxCoordinator
+from .const import CONF_STATION, DOMAIN
 
 COMPONENT_DOMAIN = DOMAIN
 
-_LOGGER = logging.getLogger(__name__)
-
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        "station": str,
-        "username": str,
-        "password": str,
+        vol.Required(CONF_STATION): str,
+        vol.Required(CONF_USERNAME): str,
+        vol.Required(CONF_PASSWORD): str,
     }
 )
 
 
-class PlaceholderHub:
-    """Wallbox Hub class."""
-
-    def __init__(self, station, username, password):
-        """Initialize."""
-        self._station = station
-        self._username = username
-        self._password = password
-
-    def authenticate(self) -> bool:
-        """Authenticate using Wallbox API."""
-        try:
-            wallbox = Wallbox(self._username, self._password)
-            wallbox.authenticate()
-            return True
-        except requests.exceptions.HTTPError as wallbox_connection_error:
-            if wallbox_connection_error.response.status_code == "403":
-                raise InvalidAuth from wallbox_connection_error
-            raise ConnectionError from wallbox_connection_error
-
-    def get_data(self) -> bool:
-        """Get new sensor data for Wallbox component."""
-
-        try:
-            wallbox = Wallbox(self._username, self._password)
-            wallbox.authenticate()
-            wallbox.getChargerStatus(self._station)
-            return True
-        except requests.exceptions.HTTPError as wallbox_connection_error:
-            if wallbox_connection_error.response.status_code == "403":
-                raise InvalidAuth from wallbox_connection_error
-            raise ConnectionError from wallbox_connection_error
-
-
-async def validate_input(hass: core.HomeAssistant, data):
-    """Validate the user input allows us to connect.
+async def validate_input(
+    hass: core.HomeAssistant, data: dict[str, Any]
+) -> dict[str, str]:
+    """Validate the user input allows to connect.
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
+    wallbox = Wallbox(data["username"], data["password"])
+    wallbox_coordinator = WallboxCoordinator(data["station"], wallbox, hass)
 
-    hub = PlaceholderHub(data["station"], data["username"], data["password"])
-
-    await hass.async_add_executor_job(
-        hub.authenticate,
-    )
-
-    await hass.async_add_executor_job(hub.get_data)
+    await wallbox_coordinator.async_validate_input()
 
     # Return info that you want to store in the config entry.
     return {"title": "Wallbox Portal"}
@@ -77,10 +43,23 @@ async def validate_input(hass: core.HomeAssistant, data):
 class ConfigFlow(config_entries.ConfigFlow, domain=COMPONENT_DOMAIN):
     """Handle a config flow for Wallbox."""
 
-    VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
+    def __init__(self) -> None:
+        """Start the Wallbox config flow."""
+        self._reauth_entry: config_entries.ConfigEntry | None = None
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_reauth(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Perform reauth upon an API authentication error."""
+        self._reauth_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+
+        return await self.async_step_user()
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Handle the initial step."""
         if user_input is None:
             return self.async_show_form(
@@ -91,27 +70,27 @@ class ConfigFlow(config_entries.ConfigFlow, domain=COMPONENT_DOMAIN):
         errors = {}
 
         try:
-            info = await validate_input(self.hass, user_input)
-        except CannotConnect:
-            _LOGGER.error("Cannot get MyWallbox data, is station serial correct?")
+            await self.async_set_unique_id(user_input["station"])
+            if not self._reauth_entry:
+                self._abort_if_unique_id_configured()
+                info = await validate_input(self.hass, user_input)
+                return self.async_create_entry(title=info["title"], data=user_input)
+            if user_input["station"] == self._reauth_entry.data[CONF_STATION]:
+                self.hass.config_entries.async_update_entry(
+                    self._reauth_entry, data=user_input, unique_id=user_input["station"]
+                )
+                self.hass.async_create_task(
+                    self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
+                )
+                return self.async_abort(reason="reauth_successful")
+            errors["base"] = "reauth_invalid"
+        except ConnectionError:
             errors["base"] = "cannot_connect"
         except InvalidAuth:
             errors["base"] = "invalid_auth"
-            _LOGGER.error("Cannot authenticate for MyWallbox")
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.exception("Unexpected exception")
-            errors["base"] = "unknown"
-        else:
-            return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+            step_id="user",
+            data_schema=STEP_USER_DATA_SCHEMA,
+            errors=errors,
         )
-
-
-class CannotConnect(exceptions.HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-
-class InvalidAuth(exceptions.HomeAssistantError):
-    """Error to indicate there is invalid auth."""

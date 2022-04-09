@@ -1,109 +1,90 @@
-"""Home Assistant component for accessing the Wallbox Portal API, the number component allows set charging power."""
+"""Home Assistant component for accessing the Wallbox Portal API. The sensor component creates multiple sensors regarding wallbox performance."""
+from __future__ import annotations
 
-from datetime import timedelta
-import logging
+from dataclasses import dataclass
+from typing import Optional, cast
 
-from homeassistant.components.number import NumberEntity
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
+from homeassistant.components.number import NumberEntity, NumberEntityDescription
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from . import InvalidAuth, WallboxCoordinator, WallboxEntity
+from .const import (
+    CONF_DATA_KEY,
+    CONF_MAX_AVAILABLE_POWER_KEY,
+    CONF_MAX_CHARGING_CURRENT_KEY,
+    CONF_SERIAL_NUMBER_KEY,
+    DOMAIN,
 )
-from homeassistant.const import ELECTRIC_CURRENT_AMPERE
-
-from .const import CONF_CONNECTIONS, CONF_STATION, DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
 
 
-def wallbox_updater(wallbox, station):
-    """Get new data for Wallbox component."""
-
-    data = wallbox.getChargerStatus(station)
-    max_charger_current = data["config_data"]["max_charging_current"]
-    return max_charger_current
+@dataclass
+class WallboxNumberEntityDescription(NumberEntityDescription):
+    """Describes Wallbox sensor entity."""
 
 
-async def async_setup_entry(hass, config, async_add_entities):
-    """Create wallbox switch entities in HASS."""
+NUMBER_TYPES: dict[str, WallboxNumberEntityDescription] = {
+    CONF_MAX_CHARGING_CURRENT_KEY: WallboxNumberEntityDescription(
+        key=CONF_MAX_CHARGING_CURRENT_KEY,
+        name="Max. Charging Current",
+        min_value=6,
+    ),
+}
 
-    wallbox = hass.data[DOMAIN][CONF_CONNECTIONS][config.entry_id]
 
-    name = config.title
-    station = config.data[CONF_STATION]
-
-    async def async_update_data():
-
-        try:
-            return await hass.async_add_executor_job(wallbox_updater, wallbox, station)
-
-        except ConnectionError:
-            _LOGGER.error("Error getting data from wallbox API")
-            return
-
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        # Name of the data. For logging purposes.
-        name="wallbox",
-        update_method=async_update_data,
-        # Polling interval. Will only be polled if there are subscribers.
-        update_interval=timedelta(seconds=15),
-    )
-
-    await coordinator.async_refresh()
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    """Create wallbox sensor entities in HASS."""
+    coordinator: WallboxCoordinator = hass.data[DOMAIN][entry.entry_id]
+    # Check if the user is authorized to change current, if so, add number component:
+    try:
+        await coordinator.async_set_charging_current(
+            coordinator.data[CONF_MAX_CHARGING_CURRENT_KEY]
+        )
+    except InvalidAuth:
+        return
 
     async_add_entities(
         [
-            WallboxMaxChargingCurrent(
-                f"{name} Max. Charging Current", config, coordinator, wallbox
-            )
+            WallboxNumber(coordinator, entry, description)
+            for ent in coordinator.data
+            if (description := NUMBER_TYPES.get(ent))
         ]
     )
 
 
-class WallboxMaxChargingCurrent(CoordinatorEntity, NumberEntity):
-    """Representation of the Wallbox Pause Switch."""
+class WallboxNumber(WallboxEntity, NumberEntity):
+    """Representation of the Wallbox portal."""
 
-    def __init__(self, name, config, coordinator, wallbox):
-        """Initialize a Wallbox lock."""
+    entity_description: WallboxNumberEntityDescription
+
+    def __init__(
+        self,
+        coordinator: WallboxCoordinator,
+        entry: ConfigEntry,
+        description: WallboxNumberEntityDescription,
+    ) -> None:
+        """Initialize a Wallbox sensor."""
         super().__init__(coordinator)
-        self._wallbox = wallbox
-        self._is_on = False
-        self._name = name
-        self.station = config.data[CONF_STATION]
-        self._unit = ELECTRIC_CURRENT_AMPERE
-
-    def set_max_charging_current(self, max_charging_current):
-        """Set max charging current using API."""
-
-        try:
-            wallbox = self._wallbox
-            _LOGGER.debug("Setting charging current")
-            wallbox.setMaxChargingCurrent(self.station, max_charging_current)
-
-        except ConnectionError as exception:
-            _LOGGER.error("Unable to set charging current %s", exception)
+        self.entity_description = description
+        self._coordinator = coordinator
+        self._attr_name = f"{entry.title} {description.name}"
+        self._attr_unique_id = f"{description.key}-{coordinator.data[CONF_DATA_KEY][CONF_SERIAL_NUMBER_KEY]}"
 
     @property
-    def name(self):
-        """Return the name of the number entity."""
-        return self._name
+    def max_value(self) -> float:
+        """Return the maximum available current."""
+        return cast(float, self._coordinator.data[CONF_MAX_AVAILABLE_POWER_KEY])
 
     @property
-    def icon(self):
-        """Return the icon of the entity."""
-        return "mdi:ev-station"
+    def value(self) -> float | None:
+        """Return the state of the sensor."""
+        return cast(
+            Optional[float], self._coordinator.data[CONF_MAX_CHARGING_CURRENT_KEY]
+        )
 
-    @property
-    def unit_of_measurement(self):
-        """Return the unit of the sensor."""
-        return self._unit
-
-    @property
-    def value(self):
-        """Return the value of the entity."""
-        return self.coordinator.data
-
-    def set_value(self, value: float):
+    async def async_set_value(self, value: float) -> None:
         """Set the value of the entity."""
-        self.set_max_charging_current(value)
+        await self._coordinator.async_set_charging_current(value)
