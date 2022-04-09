@@ -5,6 +5,8 @@ This component consists of a sensor component, a switch to pause charging, a loc
 
 NEW VERSION: now using the Home Assistant Integration config flow. Just add it as an integration (MyWallbox) and fill in wallbox serial, username and password. Pausing is now changed in that it is only available when charging / connected.
 
+UPDATE 9/4/2022: rebased using the code from the builtin version; should work completely now including pausing/resuming.
+
 <del>TODO: 
 <del>1. Look into creating multiple sensor entities (instead of one containing all the data)
 <del>2. Look into combining the different platforms into 1 configuration entry.
