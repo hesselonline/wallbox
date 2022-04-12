@@ -66,13 +66,14 @@ class WallboxSwitch(WallboxEntity, SwitchEntity):
         """Return the availability of the switch."""
         return self.coordinator.data[CONF_STATUS_DESCRIPTION_KEY].lower() in [
             "charging",
-            "paused"
+            "paused",
+            "scheduled"
         ]
 
     @property
     def is_on(self) -> bool:
         """Return the status of pause/resume."""
-        return self._coordinator.data[CONF_STATUS_DESCRIPTION_KEY].lower() in ["charging", "waiting for car demand"]  # type: ignore[no-any-return]
+        return self._coordinator.data[CONF_STATUS_DESCRIPTION_KEY].lower() in ["charging", "waiting for car demand", "waiting"]  # type: ignore[no-any-return]
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Pause charger."""
